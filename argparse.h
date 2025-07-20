@@ -370,18 +370,42 @@ void argp_print_error(FILE *stream) {
         default:
             assert(false && "Unreachable");
     }
+
+    Argp_Type type;
+    const char **enum_option;
+    size_t option_count;
     if (c->err_flag) {
         const Argp_Flag *flag = c->err_flag;
         if (flag->long_name)
             fprintf(stream, " for flag --%s", flag->long_name);
         else
             fprintf(stream, " for flag -%s", flag->short_name);
+
+        type = c->err_flag->type;
+        enum_option = c->err_flag->enum_options;
+        option_count = c->err_flag->option_count;
     } else {
         fprintf(stream, " for positional argument %s", c->err_pos->name);
+
+        type = c->err_pos->type;
+        enum_option = c->err_pos->enum_options;
+        option_count = c->err_pos->option_count;
     }
 
     if (c->unknown_option)
         fprintf(stream, " got '%s'", c->unknown_option);
+
+    if (type == ARGP_ENUM) {
+        fprintf(stream, " expected {");
+        for (size_t i = 0; i < option_count; ++i) {
+            const char *option = enum_option[i];
+            fprintf(stream, "%s", option);
+
+            if (i < option_count - 1)
+                fprintf(stream, ",");
+        }
+        fprintf(stream, "}");
+    }
 
     fprintf(stream, "\n");
 }
