@@ -590,7 +590,7 @@ const char *argp_name(void *val) {
 
 #endif  // ARGPARSE_IMPLEMENTATION
 
-// Copyright 2024 Macsen Casaus <macsencasaus@gmail.com>
+// Copyright 2025 Macsen Casaus <macsencasaus@gmail.com>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
 // this software and associated documentation files (the "Software"), to deal in
