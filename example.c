@@ -31,7 +31,7 @@ int main(int argc, char **argv) {
     uint64_t *retries = argp_flag_uint("r", "retries", "N", 3, "number of retries");
     char **output_file = argp_flag_str("o", "output", "FILE", "default.txt", "output file name");
 
-    uint64_t *id = argp_pos_uint("id", 0, /* opt */ false, "the ID to process");
+    uint64_t *id = argp_pos_uint("id", 0, /* opt */ ARGP_OPT_APPEAR_NONOPT, "the ID to process");
     char **name = argp_pos_str("name", "Yorgos Lanthimos", /* opt */ true, "the name to use");
     size_t *mode = argp_pos_enum("mode", mode_options, ARRAY_SIZE(mode_options), MODE_AUTO, /* opt */true, "mode to use");
 

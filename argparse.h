@@ -16,6 +16,12 @@
 #include <stdint.h>
 #include <stdio.h>
 
+typedef enum {
+    ARGP_OPT_NONOPT = false,
+    ARGP_OPT_OPT = true,
+    ARGP_OPT_APPEAR_NONOPT,
+} Argp_Opt_Option;
+
 void argp_init(int argc, char **argv, const char *program_desc, bool default_help);
 
 // returns name of flag given its return value
@@ -33,12 +39,12 @@ char **argp_flag_str(const char *short_name, const char *long_name, const char *
 size_t *argp_flag_enum(const char *short_name, const char *long_name, const char *options[],
                        size_t option_count, size_t def, const char *desc);
 
-uint64_t *argp_pos_uint(const char *name, uint64_t def, bool opt, const char *desc);
+uint64_t *argp_pos_uint(const char *name, uint64_t def, Argp_Opt_Option opt, const char *desc);
 
-char **argp_pos_str(const char *name, char *def, bool opt, const char *desc);
+char **argp_pos_str(const char *name, char *def, Argp_Opt_Option opt, const char *desc);
 
 size_t *argp_pos_enum(const char *name, const char *option[], size_t option_count,
-                      size_t def, bool opt, const char *desc);
+                      size_t def, Argp_Opt_Option opt, const char *desc);
 
 bool argp_parse_args(void);
 
@@ -95,7 +101,7 @@ typedef struct {
     Argp_Type type;
     const char *name;
     const char *desc;
-    bool opt;
+    Argp_Opt_Option opt;
     Argp_Value val;
     Argp_Value def;
 
@@ -165,7 +171,7 @@ static Argp_Flag *argp_new_flag(Argp_Type type, const char *short_name, const ch
 }
 
 static Argp_Pos *argp_new_pos(Argp_Type type, const char *name,
-                              const char *desc, bool opt) {
+                              const char *desc, Argp_Opt_Option opt) {
     assert(argp_global_ctx.pos_count < ARGP_POS_CAP);
     Argp_Pos *pos = argp_global_ctx.poss + (argp_global_ctx.pos_count++);
     *pos = (Argp_Pos){
@@ -225,14 +231,14 @@ size_t *argp_flag_enum(const char *short_name, const char *long_name, const char
 }
 
 uint64_t *argp_pos_uint(const char *name, uint64_t def,
-                        bool opt, const char *desc) {
+                        Argp_Opt_Option opt, const char *desc) {
     Argp_Pos *pos = argp_new_pos(ARGP_UINT, name, desc, opt);
     pos->val.as_uint = def;
     pos->def.as_uint = def;
     return &pos->val.as_uint;
 }
 
-char **argp_pos_str(const char *name, char *def, bool opt, const char *desc) {
+char **argp_pos_str(const char *name, char *def, Argp_Opt_Option opt, const char *desc) {
     Argp_Pos *pos = argp_new_pos(ARGP_STR, name, desc, opt);
     pos->val.as_str = def;
     pos->def.as_str = def;
@@ -240,7 +246,7 @@ char **argp_pos_str(const char *name, char *def, bool opt, const char *desc) {
 }
 
 size_t *argp_pos_enum(const char *name, const char *options[], size_t option_count,
-                      size_t def, bool opt, const char *desc) {
+                      size_t def, Argp_Opt_Option opt, const char *desc) {
     Argp_Pos *pos = argp_new_pos(ARGP_ENUM, name, desc, opt);
     pos->val.as_enum = def;
     pos->def.as_enum = def;
@@ -258,7 +264,7 @@ void argp_print_usage(FILE *stream) {
     }
     for (size_t i = 0; i < c->pos_count; ++i) {
         const Argp_Pos *pos = c->poss + i;
-        if (pos->opt)
+        if (pos->opt == ARGP_OPT_OPT)
             fprintf(stream, " [%s]", pos->name);
         else
             fprintf(stream, " %s", pos->name);
@@ -593,12 +599,12 @@ bool argp_parse_args(void) {
         if (!argp_parse_pos(arg, pos))
             return false;
 
-        pos->opt = true;
+        pos->opt = ARGP_OPT_OPT;
     }
 
     for (size_t i = 0; i < c->pos_count; ++i) {
         Argp_Pos *pos = c->poss + i;
-        if (!pos->opt) {
+        if (pos->opt == ARGP_OPT_NONOPT) {
             c->err = ARGP_ERROR_NO_VALUE;
             c->err_pos = pos;
             return false;
