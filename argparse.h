@@ -131,6 +131,8 @@ typedef struct {
     Argp_Flag *err_flag;
     Argp_Pos *err_pos;
 
+    const char *unknown_option;
+
     int rest_argc;
     char **rest_argv;
 } Argp_Ctx;
@@ -146,8 +148,8 @@ static char *shift_args(void) {
     return res;
 }
 
-static Argp_Flag *argp_new_flag(Argp_Type type, const char *short_name,
-                                const char *long_name, const char *meta_var, const char *desc) {
+static Argp_Flag *argp_new_flag(Argp_Type type, const char *short_name, const char *long_name,
+                                const char *meta_var, const char *desc) {
     assert(short_name != NULL || long_name != NULL);
     assert(argp_global_ctx.flag_count < ARGP_FLAG_CAP);
     Argp_Ctx *c = &argp_global_ctx;
@@ -350,7 +352,7 @@ void argp_print_error(FILE *stream) {
             return;
         } break;
         case ARGP_ERROR_UNKNOWN: {
-            fprintf(stream, "Error: Unknown option\n");
+            fprintf(stream, "Error: Unknown option %s\n", c->unknown_option);
             return;
         } break;
         case ARGP_ERROR_UNKNOWN_ENUM: {
@@ -371,19 +373,23 @@ void argp_print_error(FILE *stream) {
     if (c->err_flag) {
         const Argp_Flag *flag = c->err_flag;
         if (flag->long_name)
-            fprintf(stream, " for flag '--%s'\n", flag->long_name);
+            fprintf(stream, " for flag --%s", flag->long_name);
         else
-            fprintf(stream, " for flag '-%s'\n", flag->short_name);
+            fprintf(stream, " for flag -%s", flag->short_name);
     } else {
-        fprintf(stream, " for positional argument '%s'\n", c->err_pos->name);
+        fprintf(stream, " for positional argument %s", c->err_pos->name);
     }
+
+    if (c->unknown_option)
+        fprintf(stream, " got '%s'", c->unknown_option);
+
+    fprintf(stream, "\n");
 }
 
 static Argp_Flag *try_short_name(const char *arg, size_t n) {
     Argp_Ctx *c = &argp_global_ctx;
     if (n < 1) return NULL;
-    if (arg[0] != '-')
-        return NULL;
+    if (arg[0] != '-') return NULL;
     const char *short_name = arg + 1;
 
     for (size_t i = 0; i < c->flag_count; ++i) {
@@ -425,10 +431,12 @@ static bool argp_parse_uint(char *arg, uint64_t *v) {
 
     if (*endptr != 0) {
         c->err = ARGP_ERROR_INVALID_NUMBER;
+        c->unknown_option = arg;
         return false;
     }
     if (result == ULLONG_MAX && errno == ERANGE) {
         c->err = ARGP_ERROR_INTEGER_OVERFLOW;
+        c->unknown_option = arg;
         return false;
     }
     *v = result;
@@ -464,6 +472,7 @@ static bool argp_parse_enum(char *arg, size_t *v, const char **enum_options, siz
     }
 
     c->err = ARGP_ERROR_UNKNOWN_ENUM;
+    c->unknown_option = arg;
     return false;
 }
 
@@ -484,14 +493,14 @@ static bool argp_parse_flag(Argp_Flag *flag) {
             char *arg = shift_args();
             if (!argp_parse_str(arg, &flag->val.as_str)) {
                 c->err_flag = flag;
-                return flag;
+                return false;
             }
         } break;
         case ARGP_ENUM: {
             char *arg = shift_args();
             if (!argp_parse_enum(arg, &flag->val.as_enum, flag->enum_options, flag->option_count)) {
                 c->err_flag = flag;
-                return flag;
+                return false;
             }
         } break;
         default:
@@ -518,7 +527,7 @@ static bool argp_parse_pos(char *arg, Argp_Pos *pos) {
         case ARGP_ENUM: {
             if (!argp_parse_enum(arg, &pos->val.as_enum, pos->enum_options, pos->option_count)) {
                 c->err_pos = pos;
-                return pos;
+                return false;
             }
         } break;
         default:
@@ -547,6 +556,12 @@ bool argp_parse_args(void) {
             if (!argp_parse_flag(flag))
                 return false;
             continue;
+        }
+
+        if (cur_pos == c->pos_count) {
+            c->err = ARGP_ERROR_UNKNOWN;
+            c->unknown_option = arg;
+            return false;
         }
 
         Argp_Pos *pos = c->poss + (cur_pos++);
