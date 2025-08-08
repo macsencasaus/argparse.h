@@ -6,21 +6,28 @@
 // - ARGP_FLAG_CAP - how many flags you can define
 // - ARGP_POS_CAP - how many positional arguments you can define
 // - ARGP_PRINT_WIDTH - width at which description is printed in argp_print_usage function
+// - ARGP_ASSERT - assert function
+// - ARGP_REALLOC - realloc function
+// - ARGP_LIST_INIT_CAP - initial capacity of argp list
 #ifndef ARGPARSE_H
 #define ARGPARSE_H
 
-#include <assert.h>
-#include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 
 typedef enum {
-    ARGP_OPT_NONOPT = false,
-    ARGP_OPT_OPT = true,
-    ARGP_OPT_APPEAR_NONOPT,
+    ARGP_OPT_REQUIRED = false,
+    ARGP_OPT_OPTIONAL = true,
+    ARGP_OPT_APPEAR_REQUIRED,
 } Argp_Opt_Option;
+
+typedef struct {
+    char **items;
+    size_t size;
+    size_t _cap;
+} Argp_List;
 
 void argp_init(int argc, char **argv, const char *program_desc, bool default_help);
 
@@ -39,12 +46,20 @@ char **argp_flag_str(const char *short_name, const char *long_name, const char *
 size_t *argp_flag_enum(const char *short_name, const char *long_name, const char *options[],
                        size_t option_count, size_t def, const char *desc);
 
+Argp_List *argp_flag_list(const char *short_name, const char *long_name, const char *meta_var,
+                          const char *desc);
+
 uint64_t *argp_pos_uint(const char *name, uint64_t def, Argp_Opt_Option opt, const char *desc);
 
 char **argp_pos_str(const char *name, char *def, Argp_Opt_Option opt, const char *desc);
 
 size_t *argp_pos_enum(const char *name, const char *option[], size_t option_count,
                       size_t def, Argp_Opt_Option opt, const char *desc);
+
+// NOTE: must be placed as the last positional argument
+Argp_List *argp_pos_list(const char *name, Argp_Opt_Option opt, const char *desc);
+
+void argp_free_list(Argp_List *list);
 
 bool argp_parse_args(void);
 
@@ -56,14 +71,47 @@ void argp_print_error(FILE *stream);
 #ifdef ARGPARSE_IMPLEMENTATION
 
 #include <errno.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifndef ARGP_FLAG_CAP
+#define ARGP_FLAG_CAP 128
+#endif
+
+#ifndef ARGP_POS_CAP
+#define ARGP_POS_CAP 128
+#endif
+
+#ifndef ARGP_PRINT_WIDTH
+#define ARGP_PRINT_WIDTH 24
+#endif
+
+#ifndef ARGP_LIST_INIT_CAP
+#define ARGP_LIST_INIT_CAP 6
+#endif
+
+#ifndef ARGP_ASSERT
+#include <assert.h>
+#define ARGP_ASSERT assert
+#endif
+
+#ifndef ARGP_REALLOC
+#include <stdlib.h>
+#define ARGP_REALLOC realloc
+#endif
+
+#ifndef ARGP_FREE
+#include <stdlib.h>
+#define ARGP_FREE free
+#endif
 
 typedef enum {
     ARGP_BOOL,
     ARGP_UINT,
     ARGP_STR,
     ARGP_ENUM,
+    ARGP_LIST,
     ARGP_TYPE_COUNT,
 } Argp_Type;
 
@@ -74,6 +122,7 @@ typedef enum {
     ARGP_ERROR_NO_VALUE,
     ARGP_ERROR_INVALID_NUMBER,
     ARGP_ERROR_INTEGER_OVERFLOW,
+    ARGP_ERROR_ALLOC,
     ARGP_ERROR_COUNT,
 } Argp_Error;
 
@@ -82,6 +131,7 @@ typedef union {
     uint64_t as_uint;
     char *as_str;
     size_t as_enum;
+    Argp_List as_list;
 } Argp_Value;
 
 typedef struct {
@@ -108,18 +158,6 @@ typedef struct {
     const char **enum_options;
     size_t option_count;
 } Argp_Pos;
-
-#ifndef ARGP_FLAG_CAP
-#define ARGP_FLAG_CAP 128
-#endif
-
-#ifndef ARGP_POS_CAP
-#define ARGP_POS_CAP 128
-#endif
-
-#ifndef ARGP_PRINT_WIDTH
-#define ARGP_PRINT_WIDTH 24
-#endif
 
 typedef struct {
     size_t flag_count;
@@ -230,6 +268,14 @@ size_t *argp_flag_enum(const char *short_name, const char *long_name, const char
     return &flag->val.as_enum;
 }
 
+Argp_List *argp_flag_list(const char *short_name, const char *long_name, const char *meta_var,
+                          const char *desc) {
+    Argp_Flag *flag = argp_new_flag(ARGP_LIST, short_name, long_name, meta_var, desc);
+    flag->val.as_list = (Argp_List){0};
+    flag->def.as_list = (Argp_List){0};
+    return &flag->val.as_list;
+}
+
 uint64_t *argp_pos_uint(const char *name, uint64_t def,
                         Argp_Opt_Option opt, const char *desc) {
     Argp_Pos *pos = argp_new_pos(ARGP_UINT, name, desc, opt);
@@ -255,6 +301,13 @@ size_t *argp_pos_enum(const char *name, const char *options[], size_t option_cou
     return &pos->val.as_enum;
 }
 
+Argp_List *argp_pos_list(const char *name, Argp_Opt_Option opt, const char *desc) {
+    Argp_Pos *pos = argp_new_pos(ARGP_LIST, name, desc, opt);
+    pos->val.as_list = (Argp_List){0};
+    pos->def.as_list = (Argp_List){0};
+    return &pos->val.as_list;
+}
+
 void argp_print_usage(FILE *stream) {
     Argp_Ctx *c = &argp_global_ctx;
 
@@ -264,10 +317,17 @@ void argp_print_usage(FILE *stream) {
     }
     for (size_t i = 0; i < c->pos_count; ++i) {
         const Argp_Pos *pos = c->poss + i;
-        if (pos->opt == ARGP_OPT_OPT)
-            fprintf(stream, " [%s]", pos->name);
-        else
-            fprintf(stream, " %s", pos->name);
+        if (pos->opt == ARGP_OPT_OPTIONAL) {
+            if (pos->type == ARGP_LIST)
+                fprintf(stream, " [%s...]", pos->name);
+            else
+                fprintf(stream, " [%s]", pos->name);
+        } else {
+            if (pos->type == ARGP_LIST)
+                fprintf(stream, " %s [%s...]", pos->name, pos->name);
+            else
+                fprintf(stream, " %s", pos->name);
+        }
     }
     fprintf(stream, "\n\n");
 
@@ -373,7 +433,10 @@ void argp_print_error(FILE *stream) {
         case ARGP_ERROR_INTEGER_OVERFLOW: {
             fprintf(stream, "Error: Integer overflow");
         } break;
-        default:
+        case ARGP_ERROR_ALLOC: {
+            fprintf(stream, "Error: Allocating");
+        } break;
+        case ARGP_ERROR_COUNT:
             assert(false && "Unreachable");
     }
 
@@ -506,6 +569,22 @@ static bool argp_parse_enum(char *arg, size_t *v, const char **enum_options, siz
     return false;
 }
 
+static bool argp_parse_list_entry(char *arg, Argp_List *list) {
+    if (list->_cap == 0 || list->size == list->_cap) {
+        list->_cap = list->_cap ? list->_cap << 1 : ARGP_LIST_INIT_CAP;
+
+        char **temp = list->items;
+        list->items = (char **)ARGP_REALLOC(NULL, list->_cap * sizeof(char *));
+        if (list->items == NULL) {
+            ARGP_FREE(temp);
+            return false;
+        }
+    }
+
+    list->items[list->size++] = arg;
+    return true;
+}
+
 static bool argp_parse_flag(Argp_Flag *flag) {
     Argp_Ctx *c = &argp_global_ctx;
     switch (flag->type) {
@@ -533,6 +612,13 @@ static bool argp_parse_flag(Argp_Flag *flag) {
                 return false;
             }
         } break;
+        case ARGP_LIST: {
+            char *arg = shift_args();
+            if (!argp_parse_list_entry(arg, &flag->val.as_list)) {
+                c->err_flag = flag;
+                return false;
+            }
+        } break;
         default:
             assert(false && "Unreachable");
     }
@@ -556,6 +642,12 @@ static bool argp_parse_pos(char *arg, Argp_Pos *pos) {
         } break;
         case ARGP_ENUM: {
             if (!argp_parse_enum(arg, &pos->val.as_enum, pos->enum_options, pos->option_count)) {
+                c->err_pos = pos;
+                return false;
+            }
+        } break;
+        case ARGP_LIST: {
+            if (!argp_parse_list_entry(arg, &pos->val.as_list)) {
                 c->err_pos = pos;
                 return false;
             }
@@ -594,17 +686,18 @@ bool argp_parse_args(void) {
             return false;
         }
 
-        Argp_Pos *pos = c->poss + (cur_pos++);
+        Argp_Pos *pos = c->poss + cur_pos;
+        cur_pos += pos->type != ARGP_LIST;
 
         if (!argp_parse_pos(arg, pos))
             return false;
 
-        pos->opt = ARGP_OPT_OPT;
+        pos->opt = ARGP_OPT_OPTIONAL;
     }
 
     for (size_t i = 0; i < c->pos_count; ++i) {
         Argp_Pos *pos = c->poss + i;
-        if (pos->opt == ARGP_OPT_NONOPT) {
+        if (pos->opt == ARGP_OPT_REQUIRED) {
             c->err = ARGP_ERROR_NO_VALUE;
             c->err_pos = pos;
             return false;
@@ -613,6 +706,8 @@ bool argp_parse_args(void) {
 
     return true;
 }
+
+void argp_free_list(Argp_List *list) { ARGP_FREE(list->items); }
 
 const char *argp_name(void *val) {
     Argp_Ctx *c = &argp_global_ctx;
