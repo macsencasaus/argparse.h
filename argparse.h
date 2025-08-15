@@ -5,7 +5,8 @@
 // Macros API:
 // - ARGP_FLAG_CAP - how many flags you can define
 // - ARGP_POS_CAP - how many positional arguments you can define
-// - ARGP_PRINT_WIDTH - width at which description is printed in argp_print_usage function
+// - ARGP_COMMAND_CAP - how many commands you can define
+// - ARGP_PRINT_WIDTH - width at which description of argument is printed in argp_print_usage function
 // - ARGP_ASSERT - assert function
 // - ARGP_REALLOC - realloc function
 // - ARGP_LIST_INIT_CAP - initial capacity of argp list
@@ -18,10 +19,10 @@
 #include <stdio.h>
 
 typedef enum {
-    ARGP_OPT_REQUIRED = false,
-    ARGP_OPT_OPTIONAL = true,
-    ARGP_OPT_APPEAR_REQUIRED,
-} Argp_Opt_Option;
+    ARGP_OPTIONAL = false,
+    ARGP_REQUIRED = true,
+    ARGP_APPEAR_REQUIRED,
+} Argp_Required;
 
 typedef struct {
     char **items;
@@ -29,35 +30,81 @@ typedef struct {
     size_t _cap;
 } Argp_List;
 
-void argp_init(int argc, char **argv, const char *program_desc, bool default_help);
+typedef struct {
+    const char *desc;
+    bool help;
+} Argp_Opt;
+
+typedef struct {
+    const char *desc;
+    bool help;
+    const bool *command;
+} Argp_Command_Opt;
+
+typedef struct {
+    const char *desc;
+    const char *meta_var;
+    const bool *command;
+} Argp_Flag_Opt;
+
+typedef struct {
+    const char *desc;
+    Argp_Required req;
+    const bool *command;
+} Argp_Pos_Opt;
+
+#define argp_init(argc, argv, ...) \
+    argp_init_(argc, argv, (Argp_Opt){.help = true, __VA_ARGS__})
+void argp_init_(int argc, char **argv, Argp_Opt opt);
 
 // returns name of flag given its return value
 const char *argp_name(void *val);
 
-// only requires that the flag exists to be true
-bool *argp_flag_bool(const char *short_name, const char *long_name, const char *desc);
+#define argp_command(name, ...) \
+    argp_command_(name, (Argp_Command_Opt){.help = true, __VA_ARGS__})
+bool *argp_command_(const char *name, Argp_Command_Opt opt);
 
-uint64_t *argp_flag_uint(const char *short_name, const char *long_name, const char *meta_var,
-                         uint64_t def, const char *desc);
+#define argp_flag_bool(short_name, long_name, ...) \
+    argp_flag_bool_(short_name, long_name, (Argp_Flag_Opt){__VA_ARGS__})
+bool *argp_flag_bool_(const char *short_name, const char *long_name, Argp_Flag_Opt opt);
 
-char **argp_flag_str(const char *short_name, const char *long_name, const char *meta_var,
-                     char *def, const char *desc);
+#define argp_flag_uint(short_name, long_name, def, ...) \
+    argp_flag_uint_(short_name, long_name, def, (Argp_Flag_Opt){__VA_ARGS__})
+uint64_t *argp_flag_uint_(const char *short_name, const char *long_name, uint64_t def,
+                          Argp_Flag_Opt opt);
 
-size_t *argp_flag_enum(const char *short_name, const char *long_name, const char *options[],
-                       size_t option_count, size_t def, const char *desc);
+#define argp_flag_str(short_name, long_name, def, ...) \
+    argp_flag_str_(short_name, long_name, def, (Argp_Flag_Opt){__VA_ARGS__})
+char **argp_flag_str_(const char *short_name, const char *long_name, char *def,
+                      Argp_Flag_Opt opt);
 
-Argp_List *argp_flag_list(const char *short_name, const char *long_name, const char *meta_var,
-                          const char *desc);
+#define argp_flag_enum(short_name, long_name, options, option_count, def, ...) \
+    argp_flag_enum_(short_name, long_name, options, option_count,              \
+                    def, (Argp_Flag_Opt){__VA_ARGS__})
+size_t *argp_flag_enum_(const char *short_name, const char *long_name, const char *options[],
+                        size_t option_count, size_t def, Argp_Flag_Opt opt);
 
-uint64_t *argp_pos_uint(const char *name, uint64_t def, Argp_Opt_Option opt, const char *desc);
+#define argp_flag_list(short_name, long_name, ...) \
+    argp_flag_list_(short_name, long_name, (Argp_Flag_Opt){__VA_ARGS__})
+Argp_List *argp_flag_list_(const char *short_name, const char *long_name, Argp_Flag_Opt opt);
 
-char **argp_pos_str(const char *name, char *def, Argp_Opt_Option opt, const char *desc);
+#define argp_pos_uint(name, def, ...) \
+    argp_pos_uint_(name, def, (Argp_Pos_Opt){__VA_ARGS__})
+uint64_t *argp_pos_uint_(const char *name, uint64_t def, Argp_Pos_Opt opt);
 
-size_t *argp_pos_enum(const char *name, const char *option[], size_t option_count,
-                      size_t def, Argp_Opt_Option opt, const char *desc);
+#define argp_pos_str(name, def, ...) \
+    argp_pos_str_(name, def, (Argp_Pos_Opt){__VA_ARGS__})
+char **argp_pos_str_(const char *name, char *def, Argp_Pos_Opt opt);
+
+#define argp_pos_enum(name, options, option_count, def, ...) \
+    argp_pos_enum_(name, options, option_count, def, (Argp_Pos_Opt){__VA_ARGS__})
+size_t *argp_pos_enum_(const char *name, const char *options[], size_t option_count,
+                       size_t def, Argp_Pos_Opt opt);
 
 // NOTE: must be placed as the last positional argument
-Argp_List *argp_pos_list(const char *name, Argp_Opt_Option opt, const char *desc);
+#define argp_pos_list(name, ...) \
+    argp_pos_list_(name, (Argp_Pos_Opt){__VA_ARGS__})
+Argp_List *argp_pos_list_(const char *name, Argp_Pos_Opt opt);
 
 void argp_free_list(Argp_List *list);
 
@@ -81,6 +128,10 @@ void argp_print_error(FILE *stream);
 
 #ifndef ARGP_POS_CAP
 #define ARGP_POS_CAP 128
+#endif
+
+#ifndef ARGP_COMMAND_CAP
+#define ARGP_COMMAND_CAP 64
 #endif
 
 #ifndef ARGP_PRINT_WIDTH
@@ -134,51 +185,82 @@ typedef union {
     Argp_List as_list;
 } Argp_Value;
 
-typedef struct {
+typedef struct Argp_Flag Argp_Flag;
+typedef struct Argp_Pos Argp_Pos;
+typedef struct Argp_Command Argp_Command;
+
+struct Argp_Command {
+    bool val;
+    const char *name;
+    const char *desc;
+    Argp_Flag *help_flag;
+    const Argp_Command *parent_command;
+
+    size_t pos_count;
+    size_t flag_count;
+    size_t command_count;
+
+    size_t cur_pos;
+};
+
+struct Argp_Flag {
+    Argp_Value val;
+    Argp_Value def;
+
     Argp_Type type;
     const char *short_name;
     const char *long_name;
+
     const char *meta_var;
     const char *desc;
-    Argp_Value val;
-    Argp_Value def;
 
     const char **enum_options;
     size_t option_count;
-} Argp_Flag;
 
-typedef struct {
+    const Argp_Command *command;
+};
+
+struct Argp_Pos {
+    Argp_Value val;
+    Argp_Value def;
+
     Argp_Type type;
     const char *name;
     const char *desc;
-    Argp_Opt_Option opt;
-    Argp_Value val;
-    Argp_Value def;
+    Argp_Required req;
 
     const char **enum_options;
     size_t option_count;
-} Argp_Pos;
+
+    const Argp_Command *command;
+    bool seen;
+};
 
 typedef struct {
-    size_t flag_count;
+    size_t flag_capacity;
     Argp_Flag flags[ARGP_FLAG_CAP];
 
-    size_t pos_count;
+    size_t pos_capacity;
     Argp_Pos poss[ARGP_POS_CAP];
 
-    const char *program_name;
-    const char *program_desc;
+    size_t command_capacity;
+    Argp_Command commands[ARGP_COMMAND_CAP];
 
-    Argp_Flag *help_flag;
+    // const char *program_name;
+    // const char *program_desc;
+
+    // Argp_Flag *help_flag;
 
     Argp_Error err;
     Argp_Flag *err_flag;
     Argp_Pos *err_pos;
-
     const char *unknown_option;
 
     int rest_argc;
     char **rest_argv;
+
+    Argp_Command *program_command;
+    Argp_Command *command_ctx;
 } Argp_Ctx;
 
 static Argp_Ctx argp_global_ctx;
@@ -193,35 +275,79 @@ static char *shift_args(void) {
 }
 
 static Argp_Flag *argp_new_flag(Argp_Type type, const char *short_name, const char *long_name,
-                                const char *meta_var, const char *desc) {
-    assert(short_name != NULL || long_name != NULL);
-    assert(argp_global_ctx.flag_count < ARGP_FLAG_CAP);
+                                const char *meta_var, const char *desc, Argp_Command *command) {
+    ARGP_ASSERT(short_name != NULL || long_name != NULL);
+    ARGP_ASSERT(argp_global_ctx.flag_capacity < ARGP_FLAG_CAP);
+
     Argp_Ctx *c = &argp_global_ctx;
-    Argp_Flag *flag = c->flags + (c->flag_count++);
+    Argp_Flag *flag = c->flags + (c->flag_capacity++);
+    command = command ? command : c->program_command;
+
     *flag = (Argp_Flag){
         .type = type,
         .short_name = short_name,
         .long_name = long_name,
         .meta_var = meta_var,
         .desc = desc,
+        .command = command,
     };
+
+    ++command->flag_count;
     return flag;
 }
 
-static Argp_Pos *argp_new_pos(Argp_Type type, const char *name,
-                              const char *desc, Argp_Opt_Option opt) {
-    assert(argp_global_ctx.pos_count < ARGP_POS_CAP);
-    Argp_Pos *pos = argp_global_ctx.poss + (argp_global_ctx.pos_count++);
+static Argp_Pos *argp_new_pos(Argp_Type type, const char *name, const char *desc,
+                              Argp_Required req, Argp_Command *command) {
+    ARGP_ASSERT(name != NULL);
+
+    Argp_Ctx *c = &argp_global_ctx;
+    ARGP_ASSERT(c->pos_capacity < ARGP_POS_CAP);
+
+    Argp_Pos *pos = c->poss + (c->pos_capacity++);
+    command = command ? command : c->program_command;
+
     *pos = (Argp_Pos){
         .type = type,
         .name = name,
         .desc = desc,
-        .opt = opt,
+        .req = req,
+        .command = command,
     };
+
+    ++command->pos_count;
     return pos;
 }
 
-void argp_init(int argc, char **argv, const char *program_desc, bool default_help) {
+bool *argp_command_(const char *name, Argp_Command_Opt opt) {
+    ARGP_ASSERT(name != NULL);
+
+    Argp_Ctx *c = &argp_global_ctx;
+    ARGP_ASSERT(c->command_capacity < ARGP_COMMAND_CAP);
+
+    Argp_Command *command = c->commands + (c->command_capacity++);
+    Argp_Command *parent_command = opt.command ? (Argp_Command *)opt.command : c->program_command;
+
+    *command = (Argp_Command){
+        .name = name,
+        .desc = opt.desc,
+        .parent_command = parent_command,
+    };
+    if (opt.help)
+        command->help_flag = argp_new_flag(ARGP_BOOL, "h", "help", NULL, "show this help message and exit", command);
+
+    if (parent_command)
+        ++parent_command->command_count;
+
+    return &command->val;
+}
+
+static void print_full_command_name(FILE *stream, const Argp_Command *command) {
+    if (command->parent_command)
+        print_full_command_name(stream, command->parent_command);
+    fprintf(stream, " %s", command->name);
+}
+
+void argp_init_(int argc, char **argv, Argp_Opt opt) {
     Argp_Ctx *c = &argp_global_ctx;
 
     *c = (Argp_Ctx){0};
@@ -229,38 +355,41 @@ void argp_init(int argc, char **argv, const char *program_desc, bool default_hel
     c->rest_argc = argc;
     c->rest_argv = argv;
 
-    c->program_name = shift_args();
-    c->program_desc = program_desc;
-
-    if (default_help)
-        c->help_flag = argp_new_flag(ARGP_BOOL, "h", "help", NULL, "show this help message and exit");
+    c->program_command = (Argp_Command *)argp_command_(argv[0], (Argp_Command_Opt){.desc = opt.desc, .help = opt.help});
+    c->command_ctx = NULL;
 }
 
-bool *argp_flag_bool(const char *short_name, const char *long_name,
-                     const char *desc) {
-    Argp_Flag *flag = argp_new_flag(ARGP_BOOL, short_name, long_name, NULL, desc);
+bool *argp_flag_bool_(const char *short_name, const char *long_name, Argp_Flag_Opt opt) {
+    Argp_Flag *flag = argp_new_flag(
+        ARGP_BOOL,
+        short_name,
+        long_name,
+        NULL,
+        opt.desc,
+        (Argp_Command *)opt.command);
     return &flag->val.as_bool;
 }
 
-uint64_t *argp_flag_uint(const char *short_name, const char *long_name, const char *meta_var,
-                         uint64_t def, const char *desc) {
-    Argp_Flag *flag = argp_new_flag(ARGP_UINT, short_name, long_name, meta_var, desc);
+uint64_t *argp_flag_uint_(const char *short_name, const char *long_name, uint64_t def, Argp_Flag_Opt opt) {
+    Argp_Flag *flag = argp_new_flag(ARGP_UINT, short_name, long_name,
+                                    opt.meta_var, opt.desc, (Argp_Command *)opt.command);
     flag->val.as_uint = def;
     flag->def.as_uint = def;
     return &flag->val.as_uint;
 }
 
-char **argp_flag_str(const char *short_name, const char *long_name, const char *meta_var,
-                     char *def, const char *desc) {
-    Argp_Flag *flag = argp_new_flag(ARGP_STR, short_name, long_name, meta_var, desc);
+char **argp_flag_str_(const char *short_name, const char *long_name, char *def, Argp_Flag_Opt opt) {
+    Argp_Flag *flag = argp_new_flag(ARGP_STR, short_name, long_name,
+                                    opt.meta_var, opt.desc, (Argp_Command *)opt.command);
     flag->val.as_str = def;
     flag->def.as_str = def;
     return &flag->val.as_str;
 }
 
-size_t *argp_flag_enum(const char *short_name, const char *long_name, const char *options[],
-                       size_t option_count, size_t def, const char *desc) {
-    Argp_Flag *flag = argp_new_flag(ARGP_ENUM, short_name, long_name, NULL, desc);
+size_t *argp_flag_enum_(const char *short_name, const char *long_name, const char *options[],
+                        size_t option_count, size_t def, Argp_Flag_Opt opt) {
+    Argp_Flag *flag = argp_new_flag(ARGP_ENUM, short_name, long_name, NULL, opt.desc,
+                                    (Argp_Command *)opt.command);
     flag->val.as_enum = def;
     flag->def.as_enum = def;
     flag->enum_options = options;
@@ -268,32 +397,34 @@ size_t *argp_flag_enum(const char *short_name, const char *long_name, const char
     return &flag->val.as_enum;
 }
 
-Argp_List *argp_flag_list(const char *short_name, const char *long_name, const char *meta_var,
-                          const char *desc) {
-    Argp_Flag *flag = argp_new_flag(ARGP_LIST, short_name, long_name, meta_var, desc);
+Argp_List *argp_flag_list_(const char *short_name, const char *long_name, Argp_Flag_Opt opt) {
+    Argp_Flag *flag = argp_new_flag(ARGP_LIST, short_name, long_name,
+                                    opt.meta_var, opt.desc, (Argp_Command *)opt.command);
     flag->val.as_list = (Argp_List){0};
     flag->def.as_list = (Argp_List){0};
     return &flag->val.as_list;
 }
 
-uint64_t *argp_pos_uint(const char *name, uint64_t def,
-                        Argp_Opt_Option opt, const char *desc) {
-    Argp_Pos *pos = argp_new_pos(ARGP_UINT, name, desc, opt);
+uint64_t *argp_pos_uint_(const char *name, uint64_t def, Argp_Pos_Opt opt) {
+    Argp_Pos *pos = argp_new_pos(ARGP_UINT, name, opt.desc, opt.req,
+                                 (Argp_Command *)opt.command);
     pos->val.as_uint = def;
     pos->def.as_uint = def;
     return &pos->val.as_uint;
 }
 
-char **argp_pos_str(const char *name, char *def, Argp_Opt_Option opt, const char *desc) {
-    Argp_Pos *pos = argp_new_pos(ARGP_STR, name, desc, opt);
+char **argp_pos_str_(const char *name, char *def, Argp_Pos_Opt opt) {
+    Argp_Pos *pos = argp_new_pos(ARGP_STR, name, opt.desc, opt.req,
+                                 (Argp_Command *)opt.command);
     pos->val.as_str = def;
     pos->def.as_str = def;
     return &pos->val.as_str;
 }
 
-size_t *argp_pos_enum(const char *name, const char *options[], size_t option_count,
-                      size_t def, Argp_Opt_Option opt, const char *desc) {
-    Argp_Pos *pos = argp_new_pos(ARGP_ENUM, name, desc, opt);
+size_t *argp_pos_enum_(const char *name, const char *options[], size_t option_count,
+                       size_t def, Argp_Pos_Opt opt) {
+    Argp_Pos *pos = argp_new_pos(ARGP_ENUM, name, opt.desc, opt.req,
+                                 (Argp_Command *)opt.command);
     pos->val.as_enum = def;
     pos->def.as_enum = def;
     pos->enum_options = options;
@@ -301,8 +432,9 @@ size_t *argp_pos_enum(const char *name, const char *options[], size_t option_cou
     return &pos->val.as_enum;
 }
 
-Argp_List *argp_pos_list(const char *name, Argp_Opt_Option opt, const char *desc) {
-    Argp_Pos *pos = argp_new_pos(ARGP_LIST, name, desc, opt);
+Argp_List *argp_pos_list_(const char *name, Argp_Pos_Opt opt) {
+    Argp_Pos *pos = argp_new_pos(ARGP_LIST, name, opt.desc, opt.req,
+                                 (Argp_Command *)opt.command);
     pos->val.as_list = (Argp_List){0};
     pos->def.as_list = (Argp_List){0};
     return &pos->val.as_list;
@@ -311,13 +443,23 @@ Argp_List *argp_pos_list(const char *name, Argp_Opt_Option opt, const char *desc
 void argp_print_usage(FILE *stream) {
     Argp_Ctx *c = &argp_global_ctx;
 
-    fprintf(stream, "usage: %s", c->program_name);
-    if (c->flag_count) {
-        fprintf(stream, " [OPTION]...");
-    }
-    for (size_t i = 0; i < c->pos_count; ++i) {
+    size_t command_count = c->command_ctx->command_count;
+    size_t pos_count = c->command_ctx->pos_count;
+    size_t flag_count = c->command_ctx->flag_count;
+
+    fprintf(stream, "usage:");
+    print_full_command_name(stream, c->command_ctx);
+    if (command_count)
+        fprintf(stream, " [command]");
+    if (flag_count)
+        fprintf(stream, " [options]");
+
+    for (size_t i = 0; i < c->pos_capacity; ++i) {
         const Argp_Pos *pos = c->poss + i;
-        if (pos->opt == ARGP_OPT_OPTIONAL) {
+
+        if (pos->command != c->command_ctx) continue;
+
+        if (pos->req == ARGP_OPTIONAL) {
             if (pos->type == ARGP_LIST)
                 fprintf(stream, " [%s...]", pos->name);
             else
@@ -331,17 +473,41 @@ void argp_print_usage(FILE *stream) {
     }
     fprintf(stream, "\n\n");
 
-    if (c->program_desc) {
-        fprintf(stream, "%s\n\n", c->program_desc);
+    if (c->command_ctx->desc) {
+        fprintf(stream, "%s\n\n", c->command_ctx->desc);
     }
 
-    if (c->pos_count) {
-        fprintf(stream, "positional arguments:\n");
-        for (size_t i = 0; i < c->pos_count; ++i) {
-            int width = 0;
+    if (command_count) {
+        fprintf(stream, "commands:\n");
+        for (size_t i = 0; i < c->command_capacity; ++i) {
+            const Argp_Command *command = c->commands + i;
 
+            if (command->parent_command != c->command_ctx) continue;
+
+            int width = 0;
+            width += fprintf(stream, "  %s", command->name);
+
+            if (width >= ARGP_PRINT_WIDTH) {
+                fprintf(stream, "\n");
+                width = 0;
+            }
+
+            int n = ARGP_PRINT_WIDTH - width + (int)strlen(command->desc);
+            fprintf(stream, "%*s\n", n, command->desc);
+        }
+        fprintf(stream, "\n");
+    }
+
+    if (pos_count) {
+        fprintf(stream, "positional arguments:\n");
+        for (size_t i = 0; i < c->pos_capacity; ++i) {
             const Argp_Pos *pos = c->poss + i;
+
+            if (pos->command != c->command_ctx) continue;
+
+            int width = 0;
             width += fprintf(stream, "  %s", pos->name);
+
             if (pos->type == ARGP_ENUM) {
                 width += fprintf(stream, " {");
                 for (size_t i = 0; i < pos->option_count; ++i) {
@@ -358,23 +524,21 @@ void argp_print_usage(FILE *stream) {
                 fprintf(stream, "\n");
                 width = 0;
             }
-            for (int i = 0; i < ARGP_PRINT_WIDTH - width; ++i)
-                fprintf(stream, " ");
 
-            fprintf(stream, "%s\n", pos->desc);
-
-            if (!pos->opt) continue;
+            int n = ARGP_PRINT_WIDTH - width + (int)strlen(pos->desc);
+            fprintf(stream, "%*s\n", n, pos->desc);
         }
-
         fprintf(stream, "\n");
     }
 
-    if (c->flag_count) {
+    if (flag_count) {
         fprintf(stream, "options:\n");
-        for (size_t i = 0; i < c->flag_count; ++i) {
-            int width = 0;
-
+        for (size_t i = 0; i < c->flag_capacity; ++i) {
             const Argp_Flag *flag = c->flags + i;
+
+            if (flag->command != c->command_ctx) continue;
+
+            int width = 0;
             if (flag->short_name && flag->long_name) {
                 width += fprintf(stream, "  -%s, --%s", flag->short_name, flag->long_name);
             } else if (flag->short_name) {
@@ -403,9 +567,9 @@ void argp_print_usage(FILE *stream) {
                 fprintf(stream, "\n");
                 width = 0;
             }
-            for (int i = 0; i < ARGP_PRINT_WIDTH - width; ++i)
-                fprintf(stream, " ");
-            fprintf(stream, "%s\n", flag->desc);
+
+            int n = ARGP_PRINT_WIDTH - width + (int)strlen(flag->desc);
+            fprintf(stream, "%*s\n", n, flag->desc);
         }
     }
 }
@@ -437,7 +601,7 @@ void argp_print_error(FILE *stream) {
             fprintf(stream, "Error: Allocating");
         } break;
         case ARGP_ERROR_COUNT:
-            assert(false && "Unreachable");
+            ARGP_ASSERT(false && "Unreachable");
     }
 
     Argp_Type type;
@@ -485,9 +649,9 @@ static Argp_Flag *try_short_name(const char *arg, size_t n) {
     if (arg[0] != '-') return NULL;
     const char *short_name = arg + 1;
 
-    for (size_t i = 0; i < c->flag_count; ++i) {
+    for (size_t i = 0; i < c->flag_capacity; ++i) {
         Argp_Flag *flag = c->flags + i;
-        if (!flag->short_name) continue;
+        if (flag->command != c->command_ctx || !flag->short_name) continue;
         if (strcmp(short_name, flag->short_name) == 0)
             return flag;
     }
@@ -502,9 +666,9 @@ static Argp_Flag *try_long_name(const char *arg, size_t n) {
         return NULL;
     const char *long_name = arg + 2;
 
-    for (size_t i = 0; i < c->flag_count; ++i) {
+    for (size_t i = 0; i < c->flag_capacity; ++i) {
         Argp_Flag *flag = c->flags + i;
-        if (!flag->long_name) continue;
+        if (flag->command != c->command_ctx || flag->long_name) continue;
         if (strcmp(long_name, flag->long_name) == 0)
             return flag;
     }
@@ -620,7 +784,7 @@ static bool argp_parse_flag(Argp_Flag *flag) {
             }
         } break;
         default:
-            assert(false && "Unreachable");
+            ARGP_ASSERT(false && "Unreachable");
     }
     return true;
 }
@@ -653,14 +817,13 @@ static bool argp_parse_pos(char *arg, Argp_Pos *pos) {
             }
         } break;
         default:
-            assert(false && "Unreachable");
+            ARGP_ASSERT(false && "Unreachable");
     }
     return true;
 }
 
 bool argp_parse_args(void) {
     Argp_Ctx *c = &argp_global_ctx;
-    size_t cur_pos = 0;
 
     char *arg;
     while ((arg = shift_args())) {
@@ -671,7 +834,7 @@ bool argp_parse_args(void) {
             flag = try_long_name(arg, n);
 
         if (flag) {
-            if (flag == c->help_flag) {
+            if (flag == c->command_ctx->help_flag) {
                 argp_print_usage(stdout);
                 exit(0);
             }
@@ -680,24 +843,50 @@ bool argp_parse_args(void) {
             continue;
         }
 
-        if (cur_pos == c->pos_count) {
+        Argp_Command *selected_command = NULL;
+
+        for (size_t i = 0; i < c->command_capacity; ++i) {
+            Argp_Command *command = c->commands + i;
+            if (command->parent_command == c->command_ctx &&
+                strcmp(arg, command->name) == 0) {
+                selected_command = command;
+                break;
+            }
+        }
+
+        if (selected_command) {
+            selected_command->val = true;
+            c->command_ctx = selected_command;
+            continue;
+        }
+
+        Argp_Pos *selected_pos = NULL;
+
+        for (size_t i = 0; i < c->pos_capacity; ++i) {
+            Argp_Pos *pos = c->poss + i;
+            if (pos->command == c->command_ctx &&
+                (pos->type == ARGP_LIST || !pos->seen)) {
+                selected_pos = pos;
+                break;
+            }
+        }
+
+        if (selected_pos == NULL) {
             c->err = ARGP_ERROR_UNKNOWN;
             c->unknown_option = arg;
             return false;
         }
 
-        Argp_Pos *pos = c->poss + cur_pos;
-        cur_pos += pos->type != ARGP_LIST;
-
-        if (!argp_parse_pos(arg, pos))
+        if (!argp_parse_pos(arg, selected_pos))
             return false;
 
-        pos->opt = ARGP_OPT_OPTIONAL;
+        selected_pos->seen = true;
     }
 
-    for (size_t i = 0; i < c->pos_count; ++i) {
+    for (size_t i = 0; i < c->pos_capacity; ++i) {
         Argp_Pos *pos = c->poss + i;
-        if (pos->opt == ARGP_OPT_REQUIRED) {
+        if (pos->command != c->command_ctx) continue;
+        if (pos->req == ARGP_REQUIRED && !pos->seen) {
             c->err = ARGP_ERROR_NO_VALUE;
             c->err_pos = pos;
             return false;

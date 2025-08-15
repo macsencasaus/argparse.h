@@ -1,4 +1,2 @@
-.PHONY: all
-
-all:
-	cc example.c -o example
+example: example.c
+	cc -o example example.c

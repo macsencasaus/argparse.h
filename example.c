@@ -23,19 +23,37 @@ const char *mode_options[] = {
 int main(int argc, char **argv) {
     // Initialize parser
     argp_init(argc, argv,
-              "Example program demonstrating argparse usage",
-              /* default_help */ true);
+              .desc = "Example program demonstrating argparse usage");
 
     // Define arguments
-    bool *verbose = argp_flag_bool("v", "verbose", "enable verbose output");
-    uint64_t *retries = argp_flag_uint("r", "retries", "N", 3, "number of retries");
-    char **output_file = argp_flag_str("o", "output", "FILE", "default.txt", "output file name");
-    Argp_List *linker_args = argp_flag_list("L", NULL, "LIB", "Linker argument");
 
-    uint64_t *id = argp_pos_uint("id", 0, /* opt */ ARGP_OPT_APPEAR_REQUIRED, "the ID to process");
-    char **name = argp_pos_str("name", "Yorgos Lanthimos", /* opt */ true, "the name to use");
-    size_t *mode = argp_pos_enum("mode", mode_options, ARRAY_SIZE(mode_options), MODE_AUTO, /* opt */ true, "mode to use");
-    Argp_List *files = argp_pos_list("files", ARGP_OPT_OPTIONAL, "Files");
+    // Flag arguments
+    bool *verbose = argp_flag_bool("v", "verbose", .desc = "enable verbose output");
+    uint64_t *retries = argp_flag_uint("r", "retries", 3,
+                                       .meta_var = "N", .desc = "number of retries");
+    char **output_file = argp_flag_str("o", "output", "default.txt",
+                                       .meta_var = "FILE", .desc = "output file name");
+    Argp_List *linker_args = argp_flag_list("L", NULL, .meta_var = "LIB",
+                                            .desc = "Linker argument");
+
+    // Positional Arguments
+    uint64_t *id = argp_pos_uint("id", 0, .req = ARGP_APPEAR_REQUIRED,
+                                 .desc = "the ID to process");
+    char **name = argp_pos_str("name", "Yorgos Lanthimos", .desc = "the name to use");
+    size_t *mode = argp_pos_enum("mode", mode_options, ARRAY_SIZE(mode_options), MODE_AUTO,
+                                 .desc = "mode to use");
+    Argp_List *files = argp_pos_list("files", .desc = "Files");
+
+    // Commands
+    bool *connect = argp_command("connect", .desc = "connect to something");
+
+    bool *build = argp_command("build", .desc = "build program");
+    bool *build_verbose = argp_flag_bool("v", "verbose",
+                                         .desc = "verbose mode",
+                                         .command = build);
+    char **build_file = argp_pos_str("file", NULL, .desc = "file to build",
+                                     .req = true,
+                                     .command = build);
 
     if (!argp_parse_args()) {
         argp_print_error(stderr);
