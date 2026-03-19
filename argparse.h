@@ -60,9 +60,13 @@ void argp_init_(int argc, char **argv, Argp_Opt opt);
 // returns name of flag given its return value
 const char *argp_name(void *val);
 
+// Command Arguments
+
 #define argp_command(name, ...) \
     argp_command_(name, (Argp_Command_Opt){.help = true, __VA_ARGS__})
 bool *argp_command_(const char *name, Argp_Command_Opt opt);
+
+// Flag Arguments
 
 #define argp_flag_bool(short_name, long_name, ...) \
     argp_flag_bool_(short_name, long_name, (Argp_Flag_Opt){__VA_ARGS__})
@@ -87,6 +91,8 @@ size_t *argp_flag_enum_(const char *short_name, const char *long_name, const cha
 #define argp_flag_list(short_name, long_name, ...) \
     argp_flag_list_(short_name, long_name, (Argp_Flag_Opt){__VA_ARGS__})
 Argp_List *argp_flag_list_(const char *short_name, const char *long_name, Argp_Flag_Opt opt);
+
+// Positional Arguments
 
 #define argp_pos_uint(name, def, ...) \
     argp_pos_uint_(name, def, (Argp_Pos_Opt){__VA_ARGS__})
